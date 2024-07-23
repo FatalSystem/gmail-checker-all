@@ -20,103 +20,98 @@ const { messageFormatStewie } = require("../utils/messageFormatStewie");
 const { hostname } = require("os");
 function checkNewEmails(auth) {
   const gmail = google.gmail({ version: "v1", auth });
-  server.on("connection", (ws) => {
-    ws.on("message", (message) => {
-      console.log("received: %s", message);
 
-      setInterval(async () => {
-        if (isProcessing) return; // Prevent overlapping intervals
-        isProcessing = true; // Mark as processing
+  setInterval(async () => {
+    if (isProcessing) return; // Prevent overlapping intervals
+    isProcessing = true; // Mark as processing
 
-        try {
-          const res = await gmail.users.messages.list({
-            userId: "me",
-            labelIds: ["INBOX"],
-            q: "is:unread",
-          });
+    try {
+      const res = await gmail.users.messages.list({
+        userId: "me",
+        labelIds: ["INBOX"],
+        q: "is:unread",
+      });
 
-          const messages = res.data.messages;
+      const messages = res.data.messages;
 
-          if (messages && messages.length > 0) {
-            for (const message of messages) {
-              if (!processedMessages.has(message.id)) {
-                processedMessages.add(message.id);
+      if (messages && messages.length > 0) {
+        for (const message of messages) {
+          if (!processedMessages.has(message.id)) {
+            processedMessages.add(message.id);
 
-                const msgRes = await gmail.users.messages.get({
-                  userId: "me",
-                  id: message.id,
-                });
-                const msg = msgRes.data;
-                console.log(
-                  listEmailOxford.filter((email) =>
-                    listEmailOxford.filter((email) =>
-                      msg.payload.headers
-                        ?.find((info) => info.name.includes("From"))
-                        ?.value.includes(email)
-                    )
-                  ).length > 0
+            const msgRes = await gmail.users.messages.get({
+              userId: "me",
+              id: message.id,
+            });
+            const msg = msgRes.data;
+            server.on("connection", (ws) => {
+              ws.on("message", (messa) => {
+                ws.send(
+                  msg.payload.headers?.find((info) =>
+                    info.name.includes("From")
+                  )?.value
                 );
-                if (
-                  listEmailOxford.filter((email) =>
-                    listEmailOxford.filter((email) =>
-                      msg.payload.headers
-                        ?.find((info) => info.name.includes("From"))
-                        ?.value.includes(email)
-                    )
-                  ).length > 0 &&
-                  msgRes.data.payload.parts
+              }).setMaxListeners(0);
+            });
+            console.log(
+              listEmailOxford.filter((email) =>
+                listEmailOxford.filter((email) =>
+                  msg.payload.headers
+                    ?.find((info) => info.name.includes("From"))
+                    ?.value.includes(email)
                 )
-                  parseOxfordGmail(msgRes, message.id, auth);
-                if (
-                  listEmailStewie.filter((email) =>
-                    listEmailStewie.filter((email) =>
-                      msg.payload.headers
-                        ?.find((info) => info.name.includes("From"))
-                        ?.value.includes(email)
-                    )
-                  ).length > 0 &&
-                  msgRes.data.payload.parts
-                ) {
-                  parseStewieGmail(msgRes, message.id, auth);
-                  ws.send(
-                    msg.payload.headers?.find((info) =>
-                      info.name.includes("From")
-                    )?.value
-                  );
-                }
-                if (
-                  listEmailLeaderboard.filter((email) =>
-                    listEmailLeaderboard.filter((email) =>
-                      msg.payload.headers
-                        ?.find((info) => info.name.includes("From"))
-                        ?.value.includes(email)
-                    )
-                  ).length > 0 &&
-                  msgRes.data.payload.parts
+              ).length > 0
+            );
+            if (
+              listEmailOxford.filter((email) =>
+                listEmailOxford.filter((email) =>
+                  msg.payload.headers
+                    ?.find((info) => info.name.includes("From"))
+                    ?.value.includes(email)
                 )
-                  parseLeaderboardGmail(msgRes, message.id, auth);
-              }
+              ).length > 0 &&
+              msgRes.data.payload.parts
+            )
+              parseOxfordGmail(msgRes, message.id, auth);
+            if (
+              listEmailStewie.filter((email) =>
+                listEmailStewie.filter((email) =>
+                  msg.payload.headers
+                    ?.find((info) => info.name.includes("From"))
+                    ?.value.includes(email)
+                )
+              ).length > 0 &&
+              msgRes.data.payload.parts
+            ) {
+              parseStewieGmail(msgRes, message.id, auth);
+              ws.send(
+                msg.payload.headers?.find((info) => info.name.includes("From"))
+                  ?.value
+              );
             }
-          } else {
-            console.log("NEW message empty");
+            if (
+              listEmailLeaderboard.filter((email) =>
+                listEmailLeaderboard.filter((email) =>
+                  msg.payload.headers
+                    ?.find((info) => info.name.includes("From"))
+                    ?.value.includes(email)
+                )
+              ).length > 0 &&
+              msgRes.data.payload.parts
+            )
+              parseLeaderboardGmail(msgRes, message.id, auth);
           }
-        } catch (err) {
-          console.error("API повернув помилку: " + err);
-        } finally {
-          isProcessing = false; // Mark as not processing
         }
-      }, 1000);
-      ws.send(`Hello, you sent -> ${message}`);
-    });
-    ws.send("Hi there, I am a WebSocket server");
-    app.get("/", (req, res) => {
-      res.send("WebSocket server is running");
-    });
-
-    server.listen(8080, () => {
-      console.log("Server is listening on port 8080");
-    });
-  }); // Checking every 10 seconds
+      } else {
+        console.log("NEW message empty");
+      }
+    } catch (err) {
+      console.error("API повернув помилку: " + err);
+    } finally {
+      isProcessing = false; // Mark as not processing
+    }
+  }, 1000);
+  // Checking every 10 seconds
 }
 
 // Ensure you have a valid OAuth2 client and call checkNewEmails with it
@@ -166,7 +161,7 @@ async function parseLeaderboardGmail(msgRes, messageId, auth) {
 }
 
 async function parseOxfordGmail(msgRes, messageId, auth) {
-  const whiteList = ["action to take: buy"];
+  const whiteList = ["ction to take", "action to take: buy"];
   const msg = msgRes.data;
   const body = Buffer.from(
     msgRes.data.payload.parts[0].body.data,
