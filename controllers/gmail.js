@@ -1,4 +1,9 @@
 const { google } = require("googleapis");
+const WebSocket = require("ws");
+const server = new WebSocket.Server({ port: 8080 });
+
+console.log("WebSocket server is running on ws://localhost:8080");
+
 const axios = require("axios");
 const processedMessages = new Set(); // To keep track of processed messages
 let isProcessing = false; // To ensure only one processing cycle runs at a time
@@ -8,90 +13,110 @@ const listEmailOxford = [
 ];
 const listEmailStewie = ["stewie@artoftrading.net"];
 const listEmailLeaderboard = ["do-not-reply@mail.investors.com"];
-
-const TELEGRAM_TOKEN = "7266099507:AAG5KFAjz1QTxncX6AOOIIlyh4nR0ma4LLo";
+require("dotenv").config();
 
 const { messageFormat } = require("../utils/messageFormat");
 const { messageFormatStewie } = require("../utils/messageFormatStewie");
+const { hostname } = require("os");
 function checkNewEmails(auth) {
   const gmail = google.gmail({ version: "v1", auth });
+  server.on("connection", (ws) => {
+    ws.on("message", (message) => {
+      console.log("received: %s", message);
 
-  setInterval(async () => {
-    if (isProcessing) return; // Prevent overlapping intervals
-    isProcessing = true; // Mark as processing
+      setInterval(async () => {
+        if (isProcessing) return; // Prevent overlapping intervals
+        isProcessing = true; // Mark as processing
 
-    try {
-      const res = await gmail.users.messages.list({
-        userId: "me",
-        labelIds: ["INBOX"],
-        q: "is:unread",
-      });
+        try {
+          const res = await gmail.users.messages.list({
+            userId: "me",
+            labelIds: ["INBOX"],
+            q: "is:unread",
+          });
 
-      const messages = res.data.messages;
+          const messages = res.data.messages;
 
-      if (messages && messages.length > 0) {
-        for (const message of messages) {
-          if (!processedMessages.has(message.id)) {
-            processedMessages.add(message.id);
+          if (messages && messages.length > 0) {
+            for (const message of messages) {
+              if (!processedMessages.has(message.id)) {
+                processedMessages.add(message.id);
 
-            const msgRes = await gmail.users.messages.get({
-              userId: "me",
-              id: message.id,
-            });
-            const msg = msgRes.data;
-            console.log(
-              listEmailOxford.filter((email) =>
-                listEmailOxford.filter((email) =>
-                  msg.payload.headers
-                    ?.find((info) => info.name.includes("From"))
-                    ?.value.includes(email)
+                const msgRes = await gmail.users.messages.get({
+                  userId: "me",
+                  id: message.id,
+                });
+                const msg = msgRes.data;
+                console.log(
+                  listEmailOxford.filter((email) =>
+                    listEmailOxford.filter((email) =>
+                      msg.payload.headers
+                        ?.find((info) => info.name.includes("From"))
+                        ?.value.includes(email)
+                    )
+                  ).length > 0
+                );
+                if (
+                  listEmailOxford.filter((email) =>
+                    listEmailOxford.filter((email) =>
+                      msg.payload.headers
+                        ?.find((info) => info.name.includes("From"))
+                        ?.value.includes(email)
+                    )
+                  ).length > 0 &&
+                  msgRes.data.payload.parts
                 )
-              ).length > 0
-            );
-            if (
-              listEmailOxford.filter((email) =>
-                listEmailOxford.filter((email) =>
-                  msg.payload.headers
-                    ?.find((info) => info.name.includes("From"))
-                    ?.value.includes(email)
+                  parseOxfordGmail(msgRes, message.id, auth);
+                if (
+                  listEmailStewie.filter((email) =>
+                    listEmailStewie.filter((email) =>
+                      msg.payload.headers
+                        ?.find((info) => info.name.includes("From"))
+                        ?.value.includes(email)
+                    )
+                  ).length > 0 &&
+                  msgRes.data.payload.parts
+                ) {
+                  parseStewieGmail(msgRes, message.id, auth);
+                  ws.send(
+                    msg.payload.headers?.find((info) =>
+                      info.name.includes("From")
+                    )?.value
+                  );
+                }
+                if (
+                  listEmailLeaderboard.filter((email) =>
+                    listEmailLeaderboard.filter((email) =>
+                      msg.payload.headers
+                        ?.find((info) => info.name.includes("From"))
+                        ?.value.includes(email)
+                    )
+                  ).length > 0 &&
+                  msgRes.data.payload.parts
                 )
-              ).length > 0 &&
-              msgRes.data.payload.parts
-            )
-              parseOxfordGmail(msgRes, message.id, auth);
-            if (
-              listEmailStewie.filter((email) =>
-                listEmailStewie.filter((email) =>
-                  msg.payload.headers
-                    ?.find((info) => info.name.includes("From"))
-                    ?.value.includes(email)
-                )
-              ).length > 0 &&
-              msgRes.data.payload.parts
-            )
-              parseStewieGmail(msgRes, message.id, auth);
-            if (
-              listEmailLeaderboard.filter((email) =>
-                listEmailLeaderboard.filter((email) =>
-                  msg.payload.headers
-                    ?.find((info) => info.name.includes("From"))
-                    ?.value.includes(email)
-                )
-              ).length > 0 &&
-              msgRes.data.payload.parts
-            )
-              parseLeaderboardGmail(msgRes, message.id, auth);
+                  parseLeaderboardGmail(msgRes, message.id, auth);
+              }
+            }
+          } else {
+            console.log("NEW message empty");
           }
+        } catch (err) {
+          console.error("API повернув помилку: " + err);
+        } finally {
+          isProcessing = false; // Mark as not processing
         }
-      } else {
-        console.log("NEW message empty");
-      }
-    } catch (err) {
-      console.error("API повернув помилку: " + err);
-    } finally {
-      isProcessing = false; // Mark as not processing
-    }
-  }, 1000); // Checking every 10 seconds
+      }, 1000);
+      ws.send(`Hello, you sent -> ${message}`);
+    });
+    ws.send("Hi there, I am a WebSocket server");
+    app.get("/", (req, res) => {
+      res.send("WebSocket server is running");
+    });
+
+    server.listen(8080, () => {
+      console.log("Server is listening on port 8080");
+    });
+  }); // Checking every 10 seconds
 }
 
 // Ensure you have a valid OAuth2 client and call checkNewEmails with it
@@ -179,7 +204,6 @@ async function parseOxfordGmail(msgRes, messageId, auth) {
   isSendMessage && (await markMessageAsRead(auth, messageId, label));
 
   // Send message to bot
-
   isSendMessage && (await sendMessageToBot(customMessage, isSendMessage));
 }
 async function parseStewieGmail(msgRes, messageId, auth) {
@@ -255,10 +279,10 @@ async function markMessageAsRead(auth, messageId, label) {
 async function sendMessageToBot(message, isSendMessage) {
   const url =
     message &&
-    `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage?chat_id=593981143&text=${message}&parse_mode=HTML`;
+    `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage?chat_id=593981143&text=${message}&parse_mode=HTML`;
   const url2 =
     message &&
-    `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage?chat_id=466616096&text=${message}&parse_mode=HTML`;
+    `https://api.telegram.org/bot${process.env.TELEGRAM_TOKEN}/sendMessage?chat_id=466616096&text=${message}&parse_mode=HTML`;
 
   isSendMessage &&
     (await axios.post(url, {

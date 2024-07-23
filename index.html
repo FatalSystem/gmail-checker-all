@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WebSocket Client</title>
+  </head>
+  <body>
+    <h1>WebSocket Client</h1>
+    <script>
+      // Замініть 'your-domain.com' на ваш домен
+      const ws = new WebSocket("ws://ws.livestreambackend.net:8080/");
+
+      ws.onopen = () => {
+        console.log("Connected to WebSocket server");
+        ws.send("Hello, Server!");
+      };
+
+      ws.onmessage = (event) => {
+        console.log(`Message from server: ${event.data}`);
+      };
+
+      ws.onclose = () => {
+        console.log("Disconnected from WebSocket server");
+      };
+    </script>
+  </body>
+</html>
