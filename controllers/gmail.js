@@ -215,7 +215,7 @@ async function parseStewieGmail(msgRes, messageId, auth) {
   ).toString("utf-8");
   const msg = msgRes.data;
 
-  const text = messageFormat(msgRes);
+  const text = messageFormatStewie(msgRes);
   const isSendMessage =
     whiteList.some((word) =>
       body?.toLowerCase().includes(word.toLowerCase())
