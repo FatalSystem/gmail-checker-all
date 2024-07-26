@@ -10,15 +10,13 @@ const { messageFormatStewie } = require("../utils/messageFormatStewie");
 const { isFromList } = require("../utils/isFromList");
 
 // Load your SSL certificate and key
-const serverOptions = {
-  key: fs.readFileSync("/path/to/your/ssl/key.pem"),
-  cert: fs.readFileSync("/path/to/your/ssl/certificate.pem"),
-};
+// const serverOptions = {
+//   key: fs.readFileSync("/path/to/your/ssl/key.pem"),
+//   cert: fs.readFileSync("/path/to/your/ssl/certificate.pem"),
+// };
 
-const server = https.createServer(serverOptions);
-const wss = new WebSocket.Server({ server });
-
-console.log("WebSocket server is running on wss://findaway2024.com");
+const server = new WebSocket.Server({ port: 8080 });
+console.log("WebSocket server is running on ws://localhost:8080");
 
 const processedMessages = new Set(); // To keep track of processed messages
 let isProcessing = false; // To ensure only one processing cycle runs at a time
@@ -56,13 +54,30 @@ function checkNewEmails(auth) {
               id: message.id,
             });
             const msg = msgRes.data;
+            server.on("connection", (ws) => {
+              console.log("Client connected");
 
+              ws.on("message", (message) => {
+                console.log(`Received message: ${message}`);
+                ws.send(
+                  `You said: ${
+                    msg.payload.headers?.find((info) =>
+                      info.name.includes("From")
+                    )?.value
+                  }`
+                );
+              });
+
+              ws.on("close", () => {
+                console.log("Client disconnected");
+              });
+            });
             const fromHeader = msg.payload.headers?.find((info) =>
               info.name.includes("From")
             )?.value;
 
             if (fromHeader) {
-              wss.clients.forEach((client) => {
+              server.clients.forEach((client) => {
                 if (client.readyState === WebSocket.OPEN) {
                   client.send(fromHeader);
                 }
@@ -122,6 +137,7 @@ async function parseOxfordGmail(msgRes, messageId, auth) {
     await sendMessageToBot(customMessage);
   }
 }
+server.setMaxListeners(20);
 
 async function parseStewieGmail(msgRes, messageId, auth) {
   const msg = msgRes.data;
