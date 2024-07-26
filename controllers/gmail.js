@@ -10,12 +10,11 @@ const { messageFormatStewie } = require("../utils/messageFormatStewie");
 const { isFromList } = require("../utils/isFromList");
 
 // Load your SSL certificate and key
-// const serverOptions = {
-//   key: fs.readFileSync("/path/to/your/ssl/key.pem"),
-//   cert: fs.readFileSync("/path/to/your/ssl/certificate.pem"),
-// };
-
-const server = new WebSocket.Server({ port: 8080 });
+const server = https.createServer({
+  cert: fs.readFileSync("server.cert"),
+  key: fs.readFileSync("server.key"),
+});
+const wss = new WebSocket.Server({ server });
 console.log("WebSocket server is running on ws://localhost:8080");
 
 const processedMessages = new Set(); // To keep track of processed messages
@@ -54,7 +53,7 @@ function checkNewEmails(auth) {
               id: message.id,
             });
             const msg = msgRes.data;
-            server.on("connection", (ws) => {
+            wss.on("connection", (ws) => {
               console.log("Client connected");
 
               ws.on("message", (message) => {
@@ -137,6 +136,9 @@ async function parseOxfordGmail(msgRes, messageId, auth) {
     await sendMessageToBot(customMessage);
   }
 }
+server.listen(8080, () => {
+  console.log("WebSocket server is running on wss://localhost:8080");
+});
 server.setMaxListeners(20);
 
 async function parseStewieGmail(msgRes, messageId, auth) {
