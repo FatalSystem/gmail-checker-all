@@ -1,27 +1,30 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>WebSocket Client</title>
+    <title>WebSocket Test</title>
   </head>
   <body>
-    <h1>WebSocket Client</h1>
+    <h1>WebSocket Test</h1>
     <script>
-      // Замініть 'your-domain.com' на ваш домен
-      const ws = new WebSocket(
-        "wss://6yvc58wi8k.execute-api.us-east-1.amazonaws.com/production/"
-      );
+      const url = "wss://70zyxfprvh.execute-api.us-east-1.amazonaws.com/dev/";
+      console.log("WebSocket is supported by your Browser!");
 
-      ws.onopen = () => {
-        console.log("Connected to WebSocketrver");
+      let ws = new WebSocket(url);
+
+      ws.onopen = function (event) {
+        console.log("WebSocket is connected.", event);
         ws.send("Hello, Server!");
       };
-
-      ws.onmessage = (event) => {
-        console.log(`Message from server: ${event.data}`);
+      ws.onmessage = function (event) {
+        console.log("Message from server ", event);
       };
 
       ws.onclose = () => {
         console.log("Disconnected from WebSocket server");
+      };
+
+      ws.onerror = (error) => {
+        console.error(`WebSocket error: ${error}`);
       };
     </script>
   </body>
