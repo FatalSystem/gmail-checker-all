@@ -94,7 +94,7 @@ function checkNewEmails(auth) {
     }
   }, 1000); // Checking every 10 seconds
 }
-ws.setMaxListeners(1);
+ws.setMaxListeners(120);
 
 async function parseOxfordGmail(msgRes, messageId, auth) {
   const msg = msgRes.data;
