@@ -122,7 +122,7 @@ async function parseOxfordGmail(msgRes, messageId, auth) {
       "BLUE+" +
         String(actionToTake)
           .match(/[A-Z]{2,4}/g)
-          .join()
+          .join()+currentTime
     );
     await markMessageAsRead(auth, messageId, "OXFORD");
     await sendMessageToBot(customMessage);
