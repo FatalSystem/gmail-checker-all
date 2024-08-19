@@ -5,22 +5,30 @@ const axios = require("axios");
 require("dotenv").config();
 
 const { messageFormat } = require("../utils/messageFormat");
-const { messageFormatStewie } = require("../utils/messageFormatStewie");
 const { isFromList } = require("../utils/isFromList");
 
 // Load your SSL certificate and key
 const { getAssets } = require("../services/getAssets");
-const { getToken } = require("../utils/getToken");
 const url = "wss://70zyxfprvh.execute-api.us-east-1.amazonaws.com/dev/";
 
 let ws = new WebSocket(url);
-ws.onopen = function (event) {};
-ws.onmessage = function (event) {};
+function connect() {
+  ws.onopen = function (event) {};
+  ws.onmessage = function (event) {};
 
-ws.onclose = () => {};
+  ws.onclose = () => {
+    setTimeout(() => {
+      connect();
+    }, 1000);
+  };
 
-ws.onerror = (error) => {};
-
+  ws.onerror = (error) => {
+    setTimeout(() => {
+      connect();
+    }, 1000);
+  };
+}
+connect();
 const processedMessages = new Set(); // To keep track of processed messages
 let isProcessing = false; // To ensure only one processing cycle runs at a time
 
@@ -245,35 +253,44 @@ async function sendMessageToBot(message) {
 function sendMessageWebsocket(message) {
   ws.send(message);
 }
-const processedAssets = new Set(); // To keep track of processed messages
 async function scrapeData() {
   const whiteList = ["selling", "sell", "buy", "buying"];
   // const token = await getToken();
   // console.log("🚀 ~ scrapeData ~ token:", token);
   const assets = await getAssets();
-
-  if (assets && assets.length > 0) {
-    assets
-      .filter((asset) => asset?.asset)
-      .map(async (asset) => {
-        if (!processedAssets.has(asset.id) && asset?.asset) {
-          processedAssets.add(asset.id);
-          const currentAsset =
-            "<b><u>Current asset</u>: </b>" + asset?.asset.toString();
-          const currentTime =
-            "<b><u>Current time</u>: </b>" + new Date().toTimeString();
-          if (
-            !processedAssets.has(asset.id) &&
-            whiteList.some((word) =>
-              asset?.asset.toString().toLowerCase().includes(word)
-            )
-          )
-            return await sendMessageToBot(currentAsset + "%0A" + currentTime);
-        } else {
-          console.log("No new messages");
-          return;
-        }
-      });
+  console.log("🚀 ~ scrapeData ~ assets:", assets);
+  if (assets.length > 0) {
+    const currentAsset = "<b><u>Current asset</u>: </b>" + assets[0].toString();
+    const currentTime =
+      "<b><u>Current time</u>: </b>" + new Date().toTimeString();
+    if (
+      whiteList.some((word) =>
+        assets[0].toString().toLowerCase().includes(word)
+      )
+    )
+      return await sendMessageToBot(currentAsset + "%0A" + currentTime);
   }
 }
-module.exports = { checkNewEmails };
+// if (assets && assets.length > 0) {
+//   assets
+//     .filter((asset) => asset?.asset)
+//     .map(async (asset) => {
+//       if (asset?.asset) {
+//         processedAssets.add(asset.id);
+//         const currentAsset =
+//           "<b><u>Current asset</u>: </b>" + asset?.asset.toString();
+//         const currentTime =
+//           "<b><u>Current time</u>: </b>" + new Date().toTimeString();
+//         if (
+//           !processedAssets.has(asset.id) &&
+//           whiteList.some((word) =>
+//             asset?.asset.toString().toLowerCase().includes(word)
+//           )
+//         )
+//           return await sendMessageToBot(currentAsset + "%0A" + currentTime);
+//       } else {
+//         console.log("No new messages");
+//         return;
+//       }
+
+module.exports = { checkNewEmails, sendMessageToBot };
