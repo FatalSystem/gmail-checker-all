@@ -6,7 +6,6 @@ const SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/gmail.modify",
 ];
-const { checkNewEmails } = require("./gmail");
 const TOKEN_PATH = "./token.json";
 /**
  * Створіть клієнт OAuth2 з наданими обліковими даними та виконайте
