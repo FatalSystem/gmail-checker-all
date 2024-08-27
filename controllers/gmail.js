@@ -1,20 +1,29 @@
+require("dotenv").config();
+
 const { google } = require("googleapis");
 const WebSocket = require("ws");
 const axios = require("axios");
-
-require("dotenv").config();
-
-const { messageFormat } = require("../utils/messageFormat");
 const { isFromList } = require("../utils/isFromList");
-
-// Load your SSL certificate and key
+const { messageFormat } = require("../utils/messageFormat");
 const { getAssets } = require("../services/getAssets");
 const url = "wss://70zyxfprvh.execute-api.us-east-1.amazonaws.com/dev/";
+const ws = new WebSocket(url);
 
-let ws = new WebSocket(url);
-function connect() {
-  ws.onopen = function (event) {};
-  ws.onmessage = function (event) {};
+const processedMessages = new Set();
+let isProcessing = false;
+
+const listEmailOxford = [
+  "oxford@mp.oxfordclub.com",
+  "oxford@mb.oxfordclub.com",
+];
+const listEmailStewie = ["stewie@artoftrading.net", "<stewie@artoftrading.net"];
+const listEmailLeaderboard = ["do-not-reply@mail.investors.com"];
+
+async function checkNewEmails(auth) {
+  let ws = new WebSocket(url);
+  ws.onmessage = function (event) {
+    console.log("Received message:", event.data);
+  };
 
   ws.onclose = () => {
     setTimeout(() => {
@@ -27,23 +36,15 @@ function connect() {
       connect();
     }, 1000);
   };
-}
-connect();
-const processedMessages = new Set(); // To keep track of processed messages
-let isProcessing = false; // To ensure only one processing cycle runs at a time
 
-const listEmailOxford = [
-  "oxford@mp.oxfordclub.com",
-  "oxford@mb.oxfordclub.com",
-];
-const listEmailStewie = ["stewie@artoftrading.net", "<stewie@artoftrading.ne"];
-const listEmailLeaderboard = ["do-not-reply@mail.investors.com"];
+  function connect() {
+    // empty function, not sure what it's supposed to do
+  }
 
-function checkNewEmails(auth) {
   const gmail = google.gmail({ version: "v1", auth });
   setInterval(async () => {
-    if (isProcessing) return; // Prevent overlapping intervals
-    isProcessing = true; // Mark as processing
+    if (isProcessing) return;
+    isProcessing = true;
 
     try {
       const res = await gmail.users.messages.list({
@@ -51,10 +52,15 @@ function checkNewEmails(auth) {
         labelIds: ["INBOX"],
         q: "is:unread",
       });
+      console.log("🚀 ~ setInterval ~ res:", res);
 
       const messages = res.data.messages;
       if (messages && messages.length > 0) {
         for (const message of messages) {
+          console.log(
+            "🚀 ~ setInterval ~ processedMessages.has(message.id):",
+            processedMessages.has(message.id)
+          );
           if (!processedMessages.has(message.id)) {
             processedMessages.add(message.id);
 
@@ -62,6 +68,7 @@ function checkNewEmails(auth) {
               userId: "me",
               id: message.id,
             });
+            console.log("🚀 ~ setInterval ~ msgRes:", msgRes);
             const msg = msgRes.data;
 
             const fromHeader = msg.payload.headers?.find((info) =>
@@ -69,17 +76,17 @@ function checkNewEmails(auth) {
             )?.value;
 
             if (isFromList(fromHeader, listEmailOxford) && msg.payload.parts) {
-              parseOxfordGmail(msgRes, message.id, auth);
+              await parseOxfordGmail(msgRes, message.id, auth);
             } else if (
               isFromList(fromHeader, listEmailStewie) &&
               msg.payload.parts
             ) {
-              parseStewieGmail(msgRes, message.id, auth);
+              await parseStewieGmail(msgRes, message.id, auth);
             } else if (
               isFromList(fromHeader, listEmailLeaderboard) &&
               msg.payload.parts
             ) {
-              parseLeaderboardGmail(msgRes, message.id, auth);
+              await parseLeaderboardGmail(msgRes, message.id, auth);
             }
           }
         }
@@ -90,11 +97,10 @@ function checkNewEmails(auth) {
     } catch (err) {
       console.error("API error: " + err);
     } finally {
-      isProcessing = false; // Mark as not processing
+      isProcessing = false;
     }
-  }, 1000); // Checking every 10 seconds
+  }, 1000);
 }
-ws.setMaxListeners(120);
 
 async function parseOxfordGmail(msgRes, messageId, auth) {
   const msg = msgRes.data;
@@ -117,7 +123,7 @@ async function parseOxfordGmail(msgRes, messageId, auth) {
       "<b><u>Current time</u>: </b>" + new Date().toTimeString();
     const actionToTake =
       "<b><u>Action To Take</u>: </b>" + text.slice(0, text.indexOf(")") + 1);
-    const customMessage = "🏦 OXFORD %0A" + actionToTake + "%0A" + currentTime;
+    const customMessage = "OXFORD %0A" + actionToTake + "%0A" + currentTime;
     const wbMessage = `BLUE+${String(actionToTake.replace("NYSE", "")).match(
       /\b(?!NYSE\b)[A-Z]+\b/
     )}`;
@@ -149,20 +155,17 @@ async function parseStewieGmail(msgRes, messageId, auth) {
     const currentTime =
       "<b><u>Current time</u>: </b>" + new Date().toTimeString();
     const actionToTake = "<b><u>Action To Take</u>: </b>" + title;
-    const customMessage =
-      "🧑‍💻 STEWIE %0A" + actionToTake + "%0A" + currentTime;
+    const customMessage = "STEWIE %0A" + actionToTake + "%0A" + currentTime;
 
     const matchedWords =
       String(actionToTake).match(/\b(?!ALERT\b)[A-Z]+\b/g) || [];
 
     if (matchedWords.includes("AOT")) {
-      // Якщо є AOT, не відправляємо повідомлення
       console.log("Не відправляти повідомлення");
     } else {
-      // Якщо є інші слова після фільтрації ALERT, обробляємо їх
       if (matchedWords.length > 0 && isSendMessage) {
         console.log("Обробляємо слова:", matchedWords);
-        sendMessageWebsocket(`RED+${matchedWords})`);
+        sendMessageWebsocket(`RED+${matchedWords.join("")}`);
       } else {
         console.log("Немає слів для обробки");
       }
@@ -199,12 +202,13 @@ async function parseLeaderboardGmail(msgRes, messageId, auth) {
       msg.payload.headers?.find((info) => info.name.includes("From"))?.value,
       listEmailLeaderboard
     );
+
   if (isSendMessage) {
     const currentTime =
       "<b><u>Current time</u>: </b>" + new Date().toTimeString();
     const currentTitle = "<b><u>Title</u>: </b>" + title;
     const customMessage =
-      "📈 LEADERBOARD %0A" + currentTitle + "%0A" + currentTime;
+      "LEADERBOARD %0A" + currentTitle + "%0A" + currentTime;
     const wbMessage = `ORANGE+${String(title)
       .match(/[A-Z]{2,4}/g)
       .join("")}
@@ -250,15 +254,15 @@ async function sendMessageToBot(message) {
     console.error("Error sending message to bot:", error.message);
   }
 }
+
 function sendMessageWebsocket(message) {
   ws.send(message);
 }
+
 async function scrapeData() {
   const whiteList = ["selling", "sell", "buy", "buying"];
-  // const token = await getToken();
-  // console.log("🚀 ~ scrapeData ~ token:", token);
   const assets = await getAssets();
-  console.log("🚀 ~ scrapeData ~ assets:", assets);
+  console.log("Assets:", assets);
   if (assets.length > 0) {
     const currentAsset = "<b><u>Current asset</u>: </b>" + assets[0].toString();
     const currentTime =
@@ -271,26 +275,5 @@ async function scrapeData() {
       return await sendMessageToBot(currentAsset + "%0A" + currentTime);
   }
 }
-// if (assets && assets.length > 0) {
-//   assets
-//     .filter((asset) => asset?.asset)
-//     .map(async (asset) => {
-//       if (asset?.asset) {
-//         processedAssets.add(asset.id);
-//         const currentAsset =
-//           "<b><u>Current asset</u>: </b>" + asset?.asset.toString();
-//         const currentTime =
-//           "<b><u>Current time</u>: </b>" + new Date().toTimeString();
-//         if (
-//           !processedAssets.has(asset.id) &&
-//           whiteList.some((word) =>
-//             asset?.asset.toString().toLowerCase().includes(word)
-//           )
-//         )
-//           return await sendMessageToBot(currentAsset + "%0A" + currentTime);
-//       } else {
-//         console.log("No new messages");
-//         return;
-//       }
 
 module.exports = { checkNewEmails, sendMessageToBot };
